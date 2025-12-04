@@ -1,0 +1,35 @@
+# Fichiers sensibles
+.env
+*.env.local
+
+# Backend Java
+backend/target/
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+backend/*.iml
+backend/.idea/
+backend/.vscode/
+backend/*.log
+
+# Frontend Node
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vscode/
+frontend/*.log
+frontend/.env.local
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
