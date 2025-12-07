@@ -1,134 +1,57 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
+
+// Pages
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Attendance from './pages/Attendance';
 import Leaves from './pages/Leaves';
+import LeavesPlanning from './pages/LeavesPlanning';
 import Tasks from './pages/Tasks';
 import Messages from './pages/Messages';
 import Profile from './pages/Profile';
 import Employees from './pages/Employees';
+import CreateUser from './pages/CreateUser';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  return user ? <Layout>{children}</Layout> : <Navigate to="/login" />;
-};
-
-// Admin Route Component
-const AdminRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  return user && (user.role === 'ADMIN' || user.role === 'MANAGER') ? (
-    <Layout>{children}</Layout>
-  ) : (
-    <Navigate to="/dashboard" />
-  );
-};
-
-function AppRoutes() {
-  const { user } = useAuth();
-
-  return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
-      <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
-
-      {/* Protected Routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/attendance"
-        element={
-          <ProtectedRoute>
-            <Attendance />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/leaves"
-        element={
-          <ProtectedRoute>
-            <Leaves />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tasks"
-        element={
-          <ProtectedRoute>
-            <Tasks />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/messages"
-        element={
-          <ProtectedRoute>
-            <Messages />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Admin Routes */}
-      <Route
-        path="/employees"
-        element={
-          <AdminRoute>
-            <Employees />
-          </AdminRoute>
-        }
-      />
-
-      {/* Redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" />} />
-      <Route path="*" element={<Navigate to="/dashboard" />} />
-    </Routes>
-  );
-}
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Route publique - LOGIN UNIQUEMENT */}
+          <Route path="/login" element={<Login />} />
+          
+          {/* PAS DE ROUTE /register - Les comptes sont créés par les admins */}
+
+          {/* Routes protégées (authentification requise) */}
+          <Route element={<PrivateRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/attendance" element={<Attendance />} />
+              <Route path="/leaves" element={<Leaves />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/employees" element={<Employees />} />
+              <Route path="/leaves-planning" element={<LeavesPlanning />} />
+              
+              {/* Routes admin uniquement */}
+              <Route element={<AdminRoute />}>
+                <Route path="/admin/create-user" element={<CreateUser />} />
+              </Route>
+            </Route>
+          </Route>
+
+          {/* Route par défaut */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 

@@ -2,7 +2,6 @@ package com.s4p.entreprise.service;
 
 import com.s4p.entreprise.dto.JwtAuthResponse;
 import com.s4p.entreprise.dto.LoginRequest;
-import com.s4p.entreprise.dto.RegisterRequest;
 import com.s4p.entreprise.dto.UserDTO;
 import com.s4p.entreprise.model.User;
 import com.s4p.entreprise.repository.UserRepository;
@@ -12,9 +11,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -23,16 +20,16 @@ public class AuthService {
     private AuthenticationManager authenticationManager;
 
     @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private JwtTokenProvider tokenProvider;
-
-    @Transactional
+    /**
+     * Authentifier un utilisateur et générer un token JWT
+     */
     public JwtAuthResponse login(LoginRequest loginRequest) {
+        // Authentifier l'utilisateur
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         loginRequest.getEmail(),
@@ -40,41 +37,39 @@ public class AuthService {
                 )
         );
 
+        // Mettre l'authentification dans le contexte de sécurité
         SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = tokenProvider.generateToken(authentication);
 
+        // Générer le token JWT
+        String token = jwtTokenProvider.generateToken(authentication);
+
+        // Récupérer les informations de l'utilisateur
         User user = userRepository.findByEmail(loginRequest.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-        return new JwtAuthResponse(jwt, UserDTO.fromUser(user));
+        // Convertir User en UserDTO
+        UserDTO userDTO = convertToDTO(user);
+
+        // Créer et retourner la réponse
+        return new JwtAuthResponse(token, userDTO);
     }
 
-    @Transactional
-    public JwtAuthResponse register(RegisterRequest registerRequest) {
-        if (userRepository.existsByEmail(registerRequest.getEmail())) {
-            throw new RuntimeException("Email already exists");
-        }
-
-        User user = new User();
-        user.setFirstName(registerRequest.getFirstName());
-        user.setLastName(registerRequest.getLastName());
-        user.setEmail(registerRequest.getEmail());
-        user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
-        user.setPhone(registerRequest.getPhone());
-        user.setPosition(registerRequest.getPosition());
-        user.setDepartment(registerRequest.getDepartment());
-        user.setRole(registerRequest.getRole());
-        user.setActive(true);
-
-        user = userRepository.save(user);
-
-        // Créer l'authentification directement sans passer par authenticationManager
-        UsernamePasswordAuthenticationToken authentication = 
-            new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        
-        String jwt = tokenProvider.generateToken(authentication);
-
-        return new JwtAuthResponse(jwt, UserDTO.fromUser(user));
+    /**
+     * Convertir User en UserDTO
+     */
+    private UserDTO convertToDTO(User user) {
+        UserDTO dto = new UserDTO();
+        dto.setId(user.getId());
+        dto.setEmail(user.getEmail());
+        dto.setFirstName(user.getFirstName());
+        dto.setLastName(user.getLastName());
+        dto.setPhone(user.getPhone());
+        dto.setDepartment(user.getDepartment());
+        dto.setPosition(user.getPosition());
+        dto.setRole(user.getRole().name());
+        dto.setVacationDays(user.getVacationDays());
+        dto.setActive(user.getActive());
+        dto.setCreatedAt(user.getCreatedAt());
+        return dto;
     }
 }

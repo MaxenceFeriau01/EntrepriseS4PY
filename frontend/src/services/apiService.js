@@ -1,57 +1,61 @@
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8080/api';
+import axiosInstance from '../utils/axios';
 
 const apiService = {
   // Attendance
-  checkIn: (userId) => axios.post(`${API_URL}/attendances/check-in/${userId}`),
-  checkOut: (userId) => axios.post(`${API_URL}/attendances/check-out/${userId}`),
-  getAttendances: (userId) => axios.get(`${API_URL}/attendances/user/${userId}`),
+  checkIn: (userId) => axiosInstance.post(`/attendances/check-in/${userId}`),
+  checkOut: (userId) => axiosInstance.post(`/attendances/check-out/${userId}`),
+  getAttendances: (userId) => axiosInstance.get(`/attendances/user/${userId}`),
   getAttendancesByDateRange: (userId, startDate, endDate) =>
-    axios.get(`${API_URL}/attendances/user/${userId}/range`, {
+    axiosInstance.get(`/attendances/user/${userId}/range`, {
       params: { startDate, endDate },
     }),
 
   // Leave Requests
   createLeaveRequest: (userId, data) =>
-    axios.post(`${API_URL}/leave-requests/user/${userId}`, data),
-  getLeaveRequests: (userId) => axios.get(`${API_URL}/leave-requests/user/${userId}`),
-  getPendingLeaveRequests: () => axios.get(`${API_URL}/leave-requests/pending`),
+    axiosInstance.post(`/leave-requests/user/${userId}`, data),
+  getLeaveRequests: (userId) => axiosInstance.get(`/leave-requests/user/${userId}`),
+  getPendingLeaveRequests: () => axiosInstance.get(`/leave-requests/pending`),
   approveLeaveRequest: (id, approverId) =>
-    axios.put(`${API_URL}/leave-requests/${id}/approve`, null, {
+    axiosInstance.put(`/leave-requests/${id}/approve`, null, {
       params: { approverId },
     }),
   rejectLeaveRequest: (id, approverId, reason) =>
-    axios.put(`${API_URL}/leave-requests/${id}/reject`, { reason }, {
+    axiosInstance.put(`/leave-requests/${id}/reject`, { reason }, {
       params: { approverId },
     }),
 
   // Tasks
-  getTasks: (userId) => axios.get(`${API_URL}/tasks/user/${userId}`),
-  getAllTasks: () => axios.get(`${API_URL}/tasks`),
+  getTasks: (userId) => axiosInstance.get(`/tasks/user/${userId}`),
+  getAllTasks: () => axiosInstance.get(`/tasks`),
   createTask: (data, createdById) =>
-    axios.post(`${API_URL}/tasks`, data, { params: { createdById } }),
-  updateTask: (id, data) => axios.put(`${API_URL}/tasks/${id}`, data),
+    axiosInstance.post(`/tasks`, data, { params: { createdById } }),
+  updateTask: (id, data) => axiosInstance.put(`/tasks/${id}`, data),
   updateTaskStatus: (id, status) =>
-    axios.patch(`${API_URL}/tasks/${id}/status`, { status }),
-  deleteTask: (id) => axios.delete(`${API_URL}/tasks/${id}`),
+    axiosInstance.patch(`/tasks/${id}/status`, { status }),
+  deleteTask: (id) => axiosInstance.delete(`/tasks/${id}`),
 
   // Messages
-  getReceivedMessages: (userId) => axios.get(`${API_URL}/messages/received/${userId}`),
-  getSentMessages: (userId) => axios.get(`${API_URL}/messages/sent/${userId}`),
-  getUnreadMessages: (userId) => axios.get(`${API_URL}/messages/unread/${userId}`),
-  getUnreadCount: (userId) => axios.get(`${API_URL}/messages/unread-count/${userId}`),
-  sendMessage: (senderId, data) => axios.post(`${API_URL}/messages/send/${senderId}`, data),
-  markAsRead: (id) => axios.patch(`${API_URL}/messages/${id}/read`),
-  deleteMessage: (id) => axios.delete(`${API_URL}/messages/${id}`),
+  getReceivedMessages: (userId) => axiosInstance.get(`/messages/received/${userId}`),
+  getSentMessages: (userId) => axiosInstance.get(`/messages/sent/${userId}`),
+  getUnreadMessages: (userId) => axiosInstance.get(`/messages/unread/${userId}`),
+  getUnreadCount: (userId) => axiosInstance.get(`/messages/unread-count/${userId}`),
+  sendMessage: (senderId, data) => axiosInstance.post(`/messages/send/${senderId}`, data),
+  markAsRead: (id) => axiosInstance.patch(`/messages/${id}/read`),
+  deleteMessage: (id) => axiosInstance.delete(`/messages/${id}`),
 
   // Users
-  getAllUsers: () => axios.get(`${API_URL}/users`),
-  getActiveUsers: () => axios.get(`${API_URL}/users/active`),
-  getCurrentUser: () => axios.get(`${API_URL}/users/me`),
-  getUserById: (id) => axios.get(`${API_URL}/users/${id}`),
-  updateUser: (id, data) => axios.put(`${API_URL}/users/${id}`, data),
-  deleteUser: (id) => axios.delete(`${API_URL}/users/${id}`),
+  getAllUsers: () => axiosInstance.get(`/users`),
+  getActiveUsers: () => axiosInstance.get(`/users/active`),
+  getCurrentUser: () => axiosInstance.get(`/users/me`),
+  getUserById: (id) => axiosInstance.get(`/users/${id}`),
+  updateUser: (id, data) => axiosInstance.put(`/users/${id}`, data),
+  deleteUser: (id) => axiosInstance.delete(`/users/${id}`),
+  
+  // Admin
+  createUser: (userData) => axiosInstance.post('/admin/users', userData),
+  deactivateUser: (userId) => axiosInstance.patch(`/admin/users/${userId}/deactivate`),
+  activateUser: (userId) => axiosInstance.patch(`/admin/users/${userId}/activate`),
+  resetPassword: (userId, newPassword) => axiosInstance.patch(`/admin/users/${userId}/reset-password`, { newPassword }),
 };
 
 export default apiService;

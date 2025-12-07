@@ -12,54 +12,92 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/users")
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:5174", "http://localhost:3000"})
 public class UserController {
 
     @Autowired
     private UserService userService;
 
+    /**
+     * Obtenir tous les utilisateurs
+     * Accessible à tous les utilisateurs authentifiés
+     */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<UserDTO>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+        System.out.println("📋 GET /users - Récupération de tous les utilisateurs");
+        List<UserDTO> users = userService.getAllUsers();
+        System.out.println("✅ " + users.size() + " utilisateurs trouvés");
+        return ResponseEntity.ok(users);
     }
 
-    @GetMapping("/active")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<List<UserDTO>> getActiveUsers() {
-        return ResponseEntity.ok(userService.getActiveUsers());
-    }
-
+    /**
+     * Obtenir l'utilisateur actuellement connecté
+     */
     @GetMapping("/me")
     public ResponseEntity<UserDTO> getCurrentUser() {
-        return ResponseEntity.ok(userService.getCurrentUser());
+        System.out.println("👤 GET /users/me - Récupération de l'utilisateur actuel");
+        UserDTO user = userService.getCurrentUser();
+        return ResponseEntity.ok(user);
     }
 
+    /**
+     * Obtenir un utilisateur par son ID
+     */
     @GetMapping("/{id}")
     public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+        System.out.println("🔍 GET /users/" + id);
+        UserDTO user = userService.getUserById(id);
+        return ResponseEntity.ok(user);
     }
 
+    /**
+     * Obtenir les utilisateurs actifs
+     */
+    @GetMapping("/active")
+    public ResponseEntity<List<UserDTO>> getActiveUsers() {
+        System.out.println("✅ GET /users/active");
+        List<UserDTO> users = userService.getActiveUsers();
+        return ResponseEntity.ok(users);
+    }
+
+    /**
+     * Obtenir les utilisateurs par département
+     */
     @GetMapping("/department/{department}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<UserDTO>> getUsersByDepartment(@PathVariable String department) {
-        return ResponseEntity.ok(userService.getUsersByDepartment(department));
+        System.out.println("🏢 GET /users/department/" + department);
+        List<UserDTO> users = userService.getUsersByDepartment(department);
+        return ResponseEntity.ok(users);
     }
 
+    /**
+     * Obtenir les utilisateurs par rôle
+     */
     @GetMapping("/role/{role}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserDTO>> getUsersByRole(@PathVariable User.Role role) {
-        return ResponseEntity.ok(userService.getUsersByRole(role));
+    public ResponseEntity<List<UserDTO>> getUsersByRole(@PathVariable String role) {
+        System.out.println("🔐 GET /users/role/" + role);
+        User.Role userRole = User.Role.valueOf(role.toUpperCase());
+        List<UserDTO> users = userService.getUsersByRole(userRole);
+        return ResponseEntity.ok(users);
     }
 
+    /**
+     * Mettre à jour un utilisateur
+     */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<UserDTO> updateUser(@PathVariable Long id, @RequestBody UserDTO userDTO) {
-        return ResponseEntity.ok(userService.updateUser(id, userDTO));
+        System.out.println("📝 PUT /users/" + id);
+        UserDTO updated = userService.updateUser(id, userDTO);
+        return ResponseEntity.ok(updated);
     }
 
+    /**
+     * Supprimer un utilisateur (admin uniquement)
+     */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        System.out.println("🗑️ DELETE /users/" + id);
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
