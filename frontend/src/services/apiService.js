@@ -4,16 +4,21 @@ const apiService = {
   // Attendance
   checkIn: (userId) => axiosInstance.post(`/attendances/check-in/${userId}`),
   checkOut: (userId) => axiosInstance.post(`/attendances/check-out/${userId}`),
-  getAttendances: (userId) => axiosInstance.get(`/attendances/user/${userId}`),
+  getAttendances: () => axiosInstance.get(`/attendances`), // Pour admin - toutes les présences
+  getUserAttendances: (userId) => axiosInstance.get(`/attendances/user/${userId}`), // Pour un utilisateur spécifique
   getAttendancesByDateRange: (userId, startDate, endDate) =>
     axiosInstance.get(`/attendances/user/${userId}/range`, {
       params: { startDate, endDate },
     }),
+  createAttendance: (data) => axiosInstance.post(`/attendances/user/${data.userId}`, data),
+  updateAttendance: (id, data) => axiosInstance.put(`/attendances/${id}`, data),
+  deleteAttendance: (id) => axiosInstance.delete(`/attendances/${id}`),
 
   // Leave Requests
   createLeaveRequest: (userId, data) =>
     axiosInstance.post(`/leave-requests/user/${userId}`, data),
   getLeaveRequests: (userId) => axiosInstance.get(`/leave-requests/user/${userId}`),
+  getAllLeaveRequests: () => axiosInstance.get(`/leave-requests`), // Pour admin - tous les congés
   getPendingLeaveRequests: () => axiosInstance.get(`/leave-requests/pending`),
   approveLeaveRequest: (id, approverId) =>
     axiosInstance.put(`/leave-requests/${id}/approve`, null, {

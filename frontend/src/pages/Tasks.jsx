@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/apiService';
-import { Plus, CheckSquare, Clock, AlertCircle, X } from 'lucide-react';
+import { Plus, CheckSquare, Clock, AlertCircle, X, AlertTriangle, Zap, TrendingUp } from 'lucide-react';
 
 const Tasks = () => {
   const { user } = useAuth();
@@ -77,14 +77,32 @@ const Tasks = () => {
     }
   };
 
+  // Ordre de priorité
+  const priorityOrder = {
+    'URGENT': 1,
+    'HIGH': 2,
+    'MEDIUM': 3,
+    'LOW': 4
+  };
+
   const getPriorityColor = (priority) => {
     const colors = {
-      LOW: 'bg-gray-100 text-gray-800',
-      MEDIUM: 'bg-blue-100 text-blue-800',
-      HIGH: 'bg-orange-100 text-orange-800',
-      URGENT: 'bg-red-100 text-red-800',
+      LOW: 'bg-gray-100 text-gray-800 border-gray-300',
+      MEDIUM: 'bg-blue-100 text-blue-800 border-blue-300',
+      HIGH: 'bg-orange-100 text-orange-800 border-orange-300',
+      URGENT: 'bg-red-100 text-red-800 border-red-300',
     };
     return colors[priority] || colors.MEDIUM;
+  };
+
+  const getPriorityIcon = (priority) => {
+    const icons = {
+      LOW: <TrendingUp className="w-4 h-4" />,
+      MEDIUM: <AlertCircle className="w-4 h-4" />,
+      HIGH: <AlertTriangle className="w-4 h-4" />,
+      URGENT: <Zap className="w-4 h-4" />,
+    };
+    return icons[priority] || icons.MEDIUM;
   };
 
   const getPriorityLabel = (priority) => {
@@ -105,20 +123,58 @@ const Tasks = () => {
         return <Clock className="text-blue-500" size={20} />;
       case 'TODO':
         return <AlertCircle className="text-gray-500" size={20} />;
+      case 'CANCELLED':
+        return <X className="text-red-500" size={20} />;
       default:
         return <AlertCircle className="text-gray-500" size={20} />;
     }
   };
 
-  const filteredTasks = tasks.filter((task) => {
-    if (filter === 'ALL') return true;
-    return task.status === filter;
-  });
+  const getStatusLabel = (status) => {
+    const labels = {
+      TODO: 'À faire',
+      IN_PROGRESS: 'En cours',
+      COMPLETED: 'Terminée',
+      CANCELLED: 'Annulée',
+    };
+    return labels[status] || status;
+  };
+
+  // Filtrer et trier les tâches
+  const filteredAndSortedTasks = tasks
+    .filter((task) => {
+      if (filter === 'ALL') return true;
+      return task.status === filter;
+    })
+    .sort((a, b) => {
+      // Tri par priorité d'abord (URGENT > HIGH > MEDIUM > LOW)
+      const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      
+      // Si même priorité, tri par date d'échéance
+      if (a.dueDate && b.dueDate) {
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      }
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      
+      // Sinon tri par date de création (plus récent en premier)
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+  // Statistiques par priorité
+  const stats = {
+    urgent: tasks.filter(t => t.priority === 'URGENT' && t.status !== 'COMPLETED').length,
+    high: tasks.filter(t => t.priority === 'HIGH' && t.status !== 'COMPLETED').length,
+    medium: tasks.filter(t => t.priority === 'MEDIUM' && t.status !== 'COMPLETED').length,
+    low: tasks.filter(t => t.priority === 'LOW' && t.status !== 'COMPLETED').length,
+    completed: tasks.filter(t => t.status === 'COMPLETED').length,
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -127,11 +183,14 @@ const Tasks = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Tâches</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Tâches</h1>
+          <p className="text-sm text-gray-600 mt-1">Gestion et suivi des tâches</p>
+        </div>
         {isAdminOrManager && (
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center space-x-2 bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+            className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
           >
             <Plus size={20} />
             <span>Créer une tâche</span>
@@ -139,177 +198,273 @@ const Tasks = () => {
         )}
       </div>
 
+      {/* Statistiques par priorité */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600 uppercase font-semibold">Urgentes</p>
+              <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
+            </div>
+            <Zap className="w-8 h-8 text-red-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600 uppercase font-semibold">Élevées</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.high}</p>
+            </div>
+            <AlertTriangle className="w-8 h-8 text-orange-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600 uppercase font-semibold">Moyennes</p>
+              <p className="text-2xl font-bold text-blue-600">{stats.medium}</p>
+            </div>
+            <AlertCircle className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-gray-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600 uppercase font-semibold">Faibles</p>
+              <p className="text-2xl font-bold text-gray-600">{stats.low}</p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-gray-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-600 uppercase font-semibold">Terminées</p>
+              <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+            </div>
+            <CheckSquare className="w-8 h-8 text-green-500" />
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div className="bg-white rounded-xl shadow p-4">
         <div className="flex space-x-2 overflow-x-auto">
-          {['ALL', 'TODO', 'IN_PROGRESS', 'COMPLETED'].map((status) => (
+          {['ALL', 'TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((status) => (
             <button
               key={status}
               onClick={() => setFilter(status)}
               className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
                 filter === status
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {status === 'ALL' && 'Toutes'}
-              {status === 'TODO' && 'À faire'}
-              {status === 'IN_PROGRESS' && 'En cours'}
-              {status === 'COMPLETED' && 'Terminées'}
+              {status === 'ALL' && `Toutes (${tasks.length})`}
+              {status === 'TODO' && `À faire (${tasks.filter(t => t.status === 'TODO').length})`}
+              {status === 'IN_PROGRESS' && `En cours (${tasks.filter(t => t.status === 'IN_PROGRESS').length})`}
+              {status === 'COMPLETED' && `Terminées (${tasks.filter(t => t.status === 'COMPLETED').length})`}
+              {status === 'CANCELLED' && `Annulées (${tasks.filter(t => t.status === 'CANCELLED').length})`}
             </button>
           ))}
         </div>
       </div>
 
       {/* Tasks List */}
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <div className="space-y-4">
-          {filteredTasks.length === 0 ? (
-            <p className="text-center py-8 text-gray-500">Aucune tâche</p>
-          ) : (
-            filteredTasks.map((task) => (
-              <div
-                key={task.id}
-                className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-3 flex-1">
+      <div className="space-y-3">
+        {filteredAndSortedTasks.length === 0 ? (
+          <div className="bg-white rounded-xl shadow p-12 text-center">
+            <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg">Aucune tâche pour ce filtre</p>
+          </div>
+        ) : (
+          filteredAndSortedTasks.map((task) => (
+            <div
+              key={task.id}
+              className="bg-white rounded-lg shadow hover:shadow-md transition-all p-5 border-l-4"
+              style={{
+                borderLeftColor: 
+                  task.priority === 'URGENT' ? '#ef4444' :
+                  task.priority === 'HIGH' ? '#f97316' :
+                  task.priority === 'MEDIUM' ? '#3b82f6' : '#6b7280'
+              }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start space-x-3 flex-1">
+                  <div className="mt-1">
                     {getStatusIcon(task.status)}
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2 flex-wrap">
-                        <h3 className="font-semibold text-gray-900">{task.title}</h3>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
-                            task.priority
-                          )}`}
-                        >
-                          {getPriorityLabel(task.priority)}
-                        </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {/* Titre et priorité */}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 className="font-bold text-gray-900 text-lg">{task.title}</h3>
+                      <span
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(
+                          task.priority
+                        )}`}
+                      >
+                        {getPriorityIcon(task.priority)}
+                        {getPriorityLabel(task.priority)}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.description}</p>
+
+                    {/* Infos */}
+                    <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold">Assignée à:</span>
+                        <span>{task.assignedToName || 'Non assignée'}</span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500 flex-wrap">
-                        <span>Assignée à : {task.assignedToName}</span>
-                        <span>Créée par : {task.createdByName}</span>
-                        {task.dueDate && (
-                          <span>
-                            Échéance : {new Date(task.dueDate).toLocaleDateString('fr-FR')}
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold">Créée par:</span>
+                        <span>{task.createdByName || 'Inconnu'}</span>
+                      </div>
+                      {task.dueDate && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          <span className="font-semibold">Échéance:</span>
+                          <span className={
+                            new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED'
+                              ? 'text-red-600 font-bold'
+                              : ''
+                          }>
+                            {new Date(task.dueDate).toLocaleDateString('fr-FR')}
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="ml-4">
-                    <select
-                      value={task.status}
-                      onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="TODO">À faire</option>
-                      <option value="IN_PROGRESS">En cours</option>
-                      <option value="COMPLETED">Terminée</option>
-                      <option value="CANCELLED">Annulée</option>
-                    </select>
-                  </div>
+                </div>
+
+                {/* Dropdown statut */}
+                <div className="flex-shrink-0">
+                  <select
+                    value={task.status}
+                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="TODO">À faire</option>
+                    <option value="IN_PROGRESS">En cours</option>
+                    <option value="COMPLETED">Terminée</option>
+                    <option value="CANCELLED">Annulée</option>
+                  </select>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Modal Create Task */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Créer une tâche</h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Créer une tâche</h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <X size={20} />
+                <X size={24} />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Titre *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Titre <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Ex: Préparer le rapport mensuel"
+                  placeholder="Ex: Développer la nouvelle fonctionnalité"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   required
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Décrivez la tâche..."
+                  rows="4"
+                  placeholder="Décrivez la tâche en détail..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Assigner à *</label>
-                <select
-                  value={formData.assignedToId}
-                  onChange={(e) => setFormData({ ...formData, assignedToId: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">Sélectionner un employé</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName} - {u.position}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Priorité</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Assigner à <span className="text-red-500">*</span>
+                  </label>
                   <select
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    value={formData.assignedToId}
+                    onChange={(e) => setFormData({ ...formData, assignedToId: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="LOW">Faible</option>
-                    <option value="MEDIUM">Moyenne</option>
-                    <option value="HIGH">Élevée</option>
-                    <option value="URGENT">Urgente</option>
+                    <option value="">Sélectionner un employé</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.firstName} {u.lastName} ({u.department})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date d'échéance</label>
-                  <input
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Priorité <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="LOW">🟢 Faible</option>
+                    <option value="MEDIUM">🔵 Moyenne</option>
+                    <option value="HIGH">🟠 Élevée</option>
+                    <option value="URGENT">🔴 Urgente</option>
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date d'échéance
+                </label>
+                <input
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-md"
                 >
                   Créer la tâche
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
                 >
                   Annuler
                 </button>
