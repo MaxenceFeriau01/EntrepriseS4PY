@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/apiService';
+import { 
+  LEAVE_TYPE_LABELS, 
+  LEAVE_STATUS_LABELS,
+  LEAVE_STATUS_COLORS,
+  getLeaveTypesArray 
+} from '../constants/enums';
 import { Plus, Calendar, CheckCircle, XCircle, Clock, Umbrella } from 'lucide-react';
 
 const Leaves = () => {
@@ -75,29 +81,23 @@ const Leaves = () => {
   };
 
   const getStatusBadge = (status) => {
-    const badges = {
-      PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'En attente', icon: Clock },
-      APPROVED: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approuvé', icon: CheckCircle },
-      REJECTED: { bg: 'bg-red-100', text: 'text-red-800', label: 'Refusé', icon: XCircle },
+    const statusConfig = LEAVE_STATUS_COLORS[status] || LEAVE_STATUS_COLORS.PENDING;
+    const label = LEAVE_STATUS_LABELS[status] || status;
+    
+    const icons = {
+      PENDING: Clock,
+      APPROVED: CheckCircle,
+      REJECTED: XCircle,
+      CANCELLED: XCircle
     };
-    const badge = badges[status] || badges.PENDING;
-    const Icon = badge.icon;
+    const Icon = icons[status] || Clock;
     
     return (
-      <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+      <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
         <Icon size={14} />
-        <span>{badge.label}</span>
+        <span>{label}</span>
       </span>
     );
-  };
-
-  const leaveTypes = {
-    PAID_LEAVE: 'Congés payés',
-    SICK_LEAVE: 'Congé maladie',
-    UNPAID_LEAVE: 'Congé sans solde',
-    MATERNITY_LEAVE: 'Congé maternité',
-    PATERNITY_LEAVE: 'Congé paternité',
-    OTHER: 'Autre',
   };
 
   if (loading) {
@@ -139,7 +139,7 @@ const Leaves = () => {
                       Du {new Date(leave.startDate).toLocaleDateString('fr-FR')} au{' '}
                       {new Date(leave.endDate).toLocaleDateString('fr-FR')}
                     </p>
-                    <p className="text-sm text-gray-600">{leaveTypes[leave.leaveType]}</p>
+                    <p className="text-sm text-gray-600">{LEAVE_TYPE_LABELS[leave.leaveType]}</p>
                     {leave.reason && (
                       <p className="text-sm text-gray-600 mt-2 italic">Raison : {leave.reason}</p>
                     )}
@@ -181,7 +181,7 @@ const Leaves = () => {
                   <div className="flex items-start space-x-3">
                     <Umbrella className="text-primary-600 mt-1" size={20} />
                     <div>
-                      <p className="font-medium text-gray-900">{leaveTypes[leave.leaveType]}</p>
+                      <p className="font-medium text-gray-900">{LEAVE_TYPE_LABELS[leave.leaveType]}</p>
                       <p className="text-sm text-gray-600 mt-1">
                         Du {new Date(leave.startDate).toLocaleDateString('fr-FR')} au{' '}
                         {new Date(leave.endDate).toLocaleDateString('fr-FR')}
@@ -241,9 +241,9 @@ const Leaves = () => {
                   onChange={(e) => setFormData({ ...formData, leaveType: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 >
-                  {Object.entries(leaveTypes).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
+                  {getLeaveTypesArray().map(type => (
+                    <option key={type.value} value={type.value}>
+                      {type.emoji} {type.label}
                     </option>
                   ))}
                 </select>

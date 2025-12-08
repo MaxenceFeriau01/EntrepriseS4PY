@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/apiService';
+import { parseDate, parseTime, isWeekend as checkWeekend, getMonthName, calculateHours } from '../utils/formatters';
+import { getLeaveTypeLabel, getLeaveTypeColor, getLeaveTypeEmoji } from '../constants/enums';
 import { Calendar, TrendingUp, CheckCircle, XCircle, Clock, Umbrella, AlertCircle } from 'lucide-react';
 
 const Attendance = () => {
@@ -101,59 +103,6 @@ const Attendance = () => {
     });
   };
 
-  const parseDate = (dateValue) => {
-    if (!dateValue) return null;
-    if (typeof dateValue === 'string') return dateValue.split('T')[0];
-    if (Array.isArray(dateValue) && dateValue.length >= 3) {
-      const year = dateValue[0];
-      const month = String(dateValue[1]).padStart(2, '0');
-      const day = String(dateValue[2]).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    return null;
-  };
-
-  const parseTime = (timeValue) => {
-    if (!timeValue) return null;
-    if (typeof timeValue === 'string') return timeValue;
-    if (Array.isArray(timeValue) && timeValue.length >= 2) {
-      const hours = String(timeValue[0]).padStart(2, '0');
-      const minutes = String(timeValue[1]).padStart(2, '0');
-      return `${hours}:${minutes}`;
-    }
-    return null;
-  };
-
-  const calculateHours = (checkIn, checkOut) => {
-    const [h1, m1] = checkIn.split(':').map(Number);
-    const [h2, m2] = checkOut.split(':').map(Number);
-    return (h2 - h1) + (m2 - m1) / 60;
-  };
-
-  const getLeaveTypeName = (leaveType) => {
-    const types = {
-      PAID_LEAVE: 'Congés payés',
-      SICK_LEAVE: 'Congé maladie',
-      UNPAID_LEAVE: 'Congé sans solde',
-      MATERNITY_LEAVE: 'Congé maternité',
-      PATERNITY_LEAVE: 'Congé paternité',
-      OTHER: 'Autre'
-    };
-    return types[leaveType] || leaveType;
-  };
-
-  const getLeaveTypeColor = (leaveType) => {
-    const colors = {
-      PAID_LEAVE: { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-600', icon: 'text-blue-600' },
-      SICK_LEAVE: { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', icon: 'text-red-600' },
-      UNPAID_LEAVE: { bg: 'bg-yellow-50', border: 'border-yellow-500', text: 'text-yellow-600', icon: 'text-yellow-600' },
-      MATERNITY_LEAVE: { bg: 'bg-pink-50', border: 'border-pink-500', text: 'text-pink-600', icon: 'text-pink-600' },
-      PATERNITY_LEAVE: { bg: 'bg-purple-50', border: 'border-purple-500', text: 'text-purple-600', icon: 'text-purple-600' },
-      OTHER: { bg: 'bg-gray-50', border: 'border-gray-500', text: 'text-gray-600', icon: 'text-gray-600' }
-    };
-    return colors[leaveType] || colors.PAID_LEAVE;
-  };
-
   const getMonthDays = () => {
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     return Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -166,7 +115,7 @@ const Attendance = () => {
 
   const isWeekend = (day) => {
     const date = new Date(selectedYear, selectedMonth, day);
-    return date.getDay() === 0 || date.getDay() === 6;
+    return checkWeekend(date);
   };
 
   const isFutureDate = (day) => {
@@ -195,11 +144,6 @@ const Attendance = () => {
       return dateStr >= leaveStart && dateStr <= leaveEnd;
     });
   };
-
-  const months = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-  ];
 
   if (loading) {
     return (
@@ -282,8 +226,8 @@ const Attendance = () => {
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {months.map((month, index) => (
-                <option key={index} value={index}>{month}</option>
+              {Array.from({ length: 12 }, (_, index) => (
+                <option key={index} value={index}>{getMonthName(index)}</option>
               ))}
             </select>
           </div>
@@ -305,7 +249,7 @@ const Attendance = () => {
       {/* Calendrier */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Calendrier {months[selectedMonth]} {selectedYear}
+          Calendrier {getMonthName(selectedMonth)} {selectedYear}
         </h3>
 
         {/* Grille calendrier */}
@@ -356,7 +300,7 @@ const Attendance = () => {
               bgColor = leaveColors.bg;
               borderColor = leaveColors.border;
               icon = <Umbrella className={`w-4 h-4 ${leaveColors.icon}`} />;
-              label = getLeaveTypeName(leave.leaveType);
+              label = getLeaveTypeLabel(leave.leaveType);
             } else if (remote) {
               bgColor = 'bg-purple-50';
               borderColor = 'border-purple-500';
@@ -407,9 +351,7 @@ const Attendance = () => {
                 )}
                 {onLeave && leaveColors && (
                   <div className={`text-xs mt-1 font-medium ${leaveColors.text}`}>
-                    {leave.leaveType === 'SICK_LEAVE' ? '🤒' : 
-                     leave.leaveType === 'MATERNITY_LEAVE' ? '👶' :
-                     leave.leaveType === 'PATERNITY_LEAVE' ? '👨‍👶' : '🏖️'}
+                    {getLeaveTypeEmoji(leave.leaveType)}
                   </div>
                 )}
                 {remote && (

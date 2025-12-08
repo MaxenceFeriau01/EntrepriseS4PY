@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/apiService';
+import { timeAgo } from '../utils/formatters';
 import { MessageSquare, Send, Search, User, Circle, ArrowLeft } from 'lucide-react';
 
 const Messages = () => {
@@ -16,6 +17,7 @@ const Messages = () => {
   const [sending, setSending] = useState(false);
   
   const messagesEndRef = useRef(null);
+  const selectedConvRef = useRef(null); // Pour garder la conversation sélectionnée
 
   // Scroll automatique vers le bas
   const scrollToBottom = () => {
@@ -30,10 +32,13 @@ const Messages = () => {
     scrollToBottom();
   }, [conversationMessages]);
 
+  // Garder la référence de la conversation sélectionnée
+  useEffect(() => {
+    selectedConvRef.current = selectedConversation;
+  }, [selectedConversation]);
+
   const loadData = async () => {
     try {
-      if (!loading) setLoading(false); // Ne pas afficher le loader lors des refresh
-      
       // Charger tous les utilisateurs
       const usersResponse = await apiService.getAllUsers();
       setUsers(usersResponse.data);
@@ -50,9 +55,9 @@ const Messages = () => {
       // Créer les conversations
       const updatedConversations = createConversations(allMessages, usersResponse.data);
       
-      // Si une conversation est sélectionnée, la mettre à jour
-      if (selectedConversation) {
-        const updatedConv = updatedConversations.find(c => c.userId === selectedConversation.userId);
+      // ✅ FIX: Restaurer la conversation sélectionnée après le reload
+      if (selectedConvRef.current) {
+        const updatedConv = updatedConversations.find(c => c.userId === selectedConvRef.current.userId);
         if (updatedConv) {
           setSelectedConversation(updatedConv);
           setConversationMessages(updatedConv.messages);
@@ -119,21 +124,31 @@ const Messages = () => {
     setSelectedConversation(conversation);
     setConversationMessages(conversation.messages);
 
-    // Marquer tous les messages non lus comme lus
+    // ✅ FIX: Marquer comme lus en arrière-plan SANS recharger
     const unreadMessages = conversation.messages.filter(
       msg => msg.recipientId === user.id && !msg.read
     );
 
-    for (const msg of unreadMessages) {
-      try {
-        await apiService.markAsRead(msg.id);
-      } catch (error) {
-        console.error('Erreur marquage lu:', error);
-      }
+    if (unreadMessages.length > 0) {
+      // Marquer en arrière-plan
+      Promise.all(unreadMessages.map(msg => apiService.markAsRead(msg.id)))
+        .then(() => {
+          // Mettre à jour localement le compteur
+          setConversations(prevConvs => 
+            prevConvs.map(conv => {
+              if (conv.userId === conversation.userId) {
+                return { 
+                  ...conv, 
+                  unreadCount: 0,
+                  messages: conv.messages.map(m => ({...m, read: true}))
+                };
+              }
+              return conv;
+            })
+          );
+        })
+        .catch(error => console.error('Erreur marquage lu:', error));
     }
-
-    // Recharger les données
-    await loadData();
   };
 
   const handleSendMessage = async (e) => {
@@ -155,7 +170,7 @@ const Messages = () => {
       // Vider le champ immédiatement
       setNewMessage('');
       
-      // Recharger les messages
+      // ✅ FIX: Recharger avec conservation de la sélection
       await loadData();
       
     } catch (error) {
@@ -167,12 +182,18 @@ const Messages = () => {
   };
 
   const handleStartNewConversation = (userId) => {
+    if (!userId) return;
+    
     const existingConversation = conversations.find(c => c.userId === userId);
     
     if (existingConversation) {
+      // ✅ Si la conversation existe déjà, la sélectionner
       handleSelectConversation(existingConversation);
     } else {
+      // ✅ Créer une nouvelle conversation vide
       const otherUser = users.find(u => u.id === userId);
+      if (!otherUser) return;
+      
       const newConversation = {
         userId,
         user: otherUser,
@@ -192,17 +213,16 @@ const Messages = () => {
   });
 
   const formatMessageTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = (now - date) / (1000 * 60 * 60);
+    return timeAgo(dateString);
+  };
 
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    } else if (diffInHours < 48) {
-      return 'Hier';
-    } else {
-      return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-    }
+  // ✅ Avatars colorés uniques par personne
+  const getAvatarColor = (userId) => {
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 
+      'bg-yellow-500', 'bg-red-500', 'bg-indigo-500', 'bg-teal-500'
+    ];
+    return colors[userId % colors.length];
   };
 
   if (loading) {
@@ -225,7 +245,7 @@ const Messages = () => {
           </h2>
 
           {/* Recherche */}
-          <div className="relative">
+          <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
@@ -235,6 +255,27 @@ const Messages = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          {/* ✅ Nouvelle conversation - Toujours visible */}
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                handleStartNewConversation(parseInt(e.target.value));
+                e.target.value = '';
+              }
+            }}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+          >
+            <option value="">💬 Nouvelle conversation...</option>
+            {users
+              .filter(u => u.id !== user.id && u.active)
+              .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+              .map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.firstName} {u.lastName} • {u.department}
+                </option>
+              ))}
+          </select>
         </div>
 
         {/* Liste des conversations */}
@@ -242,29 +283,8 @@ const Messages = () => {
           {filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p className="mb-4">Aucune conversation</p>
-              
-              {/* Bouton nouvelle conversation */}
-              <div className="mt-4">
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleStartNewConversation(parseInt(e.target.value));
-                      e.target.value = '';
-                    }
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Démarrer une conversation...</option>
-                  {users
-                    .filter(u => u.id !== user.id && u.active)
-                    .map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.firstName} {u.lastName}
-                      </option>
-                    ))}
-                </select>
-              </div>
+              <p className="mb-2 font-medium">Aucune conversation</p>
+              <p className="text-sm">Utilisez le menu ci-dessus pour démarrer une conversation</p>
             </div>
           ) : (
             <>
@@ -273,17 +293,17 @@ const Messages = () => {
                   key={conversation.userId}
                   onClick={() => handleSelectConversation(conversation)}
                   className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
-                    selectedConversation?.userId === conversation.userId ? 'bg-blue-50' : ''
+                    selectedConversation?.userId === conversation.userId ? 'bg-blue-50 border-l-4 border-l-blue-600' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    {/* Avatar */}
+                    {/* Avatar coloré */}
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <User className="w-6 h-6 text-blue-600" />
+                      <div className={`w-12 h-12 ${getAvatarColor(conversation.userId)} rounded-full flex items-center justify-center text-white font-bold`}>
+                        {conversation.user?.firstName?.[0]}{conversation.user?.lastName?.[0]}
                       </div>
                       {conversation.user?.active && (
-                        <Circle className="absolute bottom-0 right-0 w-3 h-3 text-green-500 fill-current" />
+                        <Circle className="absolute bottom-0 right-0 w-3 h-3 text-green-500 fill-current bg-white rounded-full" />
                       )}
                     </div>
 
@@ -306,7 +326,7 @@ const Messages = () => {
                           {conversation.lastMessage?.content || 'Aucun message'}
                         </p>
                         {conversation.unreadCount > 0 && (
-                          <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
+                          <span className="bg-blue-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 flex-shrink-0">
                             {conversation.unreadCount}
                           </span>
                         )}
@@ -327,13 +347,13 @@ const Messages = () => {
           <div className="p-4 border-b border-gray-200 bg-white flex items-center gap-3">
             <button
               onClick={() => setSelectedConversation(null)}
-              className="md:hidden p-2 hover:bg-gray-100 rounded-lg"
+              className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="w-5 h-5 text-blue-600" />
+            <div className={`w-10 h-10 ${getAvatarColor(selectedConversation.userId)} rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold`}>
+              {selectedConversation.user?.firstName?.[0]}{selectedConversation.user?.lastName?.[0]}
             </div>
             
             <div className="flex-1 min-w-0">
@@ -350,7 +370,8 @@ const Messages = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
             {conversationMessages.length === 0 ? (
               <div className="text-center text-gray-500 py-12">
-                <p>Aucun message dans cette conversation</p>
+                <MessageSquare className="w-16 h-16 mx-auto mb-3 text-gray-300" />
+                <p className="font-medium">Aucun message dans cette conversation</p>
                 <p className="text-sm mt-2">Envoyez le premier message !</p>
               </div>
             ) : (
@@ -364,10 +385,10 @@ const Messages = () => {
                       className={`flex ${isSentByMe ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                        className={`max-w-[70%] rounded-lg px-4 py-2 shadow-sm ${
                           isSentByMe
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white border border-gray-200 text-gray-900'
+                            ? 'bg-blue-600 text-white rounded-br-none'
+                            : 'bg-white border border-gray-200 text-gray-900 rounded-bl-none'
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap break-words">
@@ -407,7 +428,7 @@ const Messages = () => {
               <button
                 type="submit"
                 disabled={!newMessage.trim() || sending}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
               >
                 {sending ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -436,14 +457,15 @@ const Messages = () => {
                   e.target.value = '';
                 }
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">Nouvelle conversation...</option>
+              <option value="">💬 Nouvelle conversation...</option>
               {users
                 .filter(u => u.id !== user.id && u.active)
+                .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
                 .map(u => (
                   <option key={u.id} value={u.id}>
-                    {u.firstName} {u.lastName} - {u.department}
+                    {u.firstName} {u.lastName} • {u.department}
                   </option>
                 ))}
             </select>

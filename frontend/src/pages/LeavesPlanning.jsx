@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../utils/axios';
+import { getMonthName } from '../utils/formatters';
+import { getLeaveTypeColor as getLeaveColor } from '../constants/enums';
 import { Calendar, Users, Search, Filter, TrendingUp, Clock } from 'lucide-react';
 
 const LeavesPlanning = () => {
@@ -109,28 +111,9 @@ const LeavesPlanning = () => {
   };
 
   const getLeaveTypeColor = (leave) => {
-    const colors = {
-      PAID_LEAVE: 'bg-blue-500',
-      SICK_LEAVE: 'bg-red-500',
-      UNPAID_LEAVE: 'bg-yellow-500',
-      MATERNITY_LEAVE: 'bg-pink-500',
-      PATERNITY_LEAVE: 'bg-purple-500',
-      OTHER: 'bg-gray-500'
-    };
-    return colors[leave.leaveType] || 'bg-gray-500';
+    const colors = getLeaveColor(leave.leaveType);
+    return colors.solid; // Utiliser la couleur solid de enums
   };
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'short'
-    });
-  };
-
-  const months = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-  ];
 
   if (loading) {
     return (
@@ -230,8 +213,8 @@ const LeavesPlanning = () => {
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {months.map((month, index) => (
-                <option key={index} value={index}>{month}</option>
+              {Array.from({ length: 12 }, (_, index) => (
+                <option key={index} value={index}>{getMonthName(index)}</option>
               ))}
             </select>
             <select
@@ -270,7 +253,7 @@ const LeavesPlanning = () => {
       {/* Planning mensuel */}
       <div className="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Planning {months[selectedMonth]} {selectedYear}
+          Planning {getMonthName(selectedMonth)} {selectedYear}
         </h3>
 
         <table className="w-full border-collapse">

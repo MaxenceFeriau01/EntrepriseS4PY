@@ -55,6 +55,11 @@ const apiService = {
   getUserById: (id) => axiosInstance.get(`/users/${id}`),
   updateUser: (id, data) => axiosInstance.put(`/users/${id}`, data),
   deleteUser: (id) => axiosInstance.delete(`/users/${id}`),
+  changePassword: (userId, currentPassword, newPassword) =>
+    axiosInstance.post(`/users/${userId}/change-password`, {
+      currentPassword,
+      newPassword
+    }),
   
   // Admin
   createUser: (userData) => axiosInstance.post('/admin/users', userData),

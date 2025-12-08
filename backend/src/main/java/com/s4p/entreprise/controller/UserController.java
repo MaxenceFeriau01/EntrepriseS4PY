@@ -1,14 +1,20 @@
 package com.s4p.entreprise.controller;
 
+import com.s4p.entreprise.dto.ChangePasswordRequest;
 import com.s4p.entreprise.dto.UserDTO;
 import com.s4p.entreprise.model.User;
+import com.s4p.entreprise.repository.UserRepository;
 import com.s4p.entreprise.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/users")
@@ -17,6 +23,12 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     /**
      * Obtenir tous les utilisateurs
@@ -89,6 +101,59 @@ public class UserController {
         System.out.println("📝 PUT /users/" + id);
         UserDTO updated = userService.updateUser(id, userDTO);
         return ResponseEntity.ok(updated);
+    }
+
+    /**
+     * Changer le mot de passe de l'utilisateur avec validation de l'ancien
+     * NOUVEAU - Sécurisé avec validation de l'ancien mot de passe
+     */
+    @PostMapping("/{userId}/change-password")
+    public ResponseEntity<?> changePassword(
+            @PathVariable Long userId,
+            @RequestBody ChangePasswordRequest request) {
+        
+        System.out.println("🔐 POST /users/" + userId + "/change-password");
+        Map<String, String> response = new HashMap<>();
+        
+        try {
+            // Vérifier que l'utilisateur existe
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+            // Vérifier l'ancien mot de passe
+            if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                System.out.println("❌ Ancien mot de passe incorrect");
+                response.put("message", "Ancien mot de passe incorrect");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+
+            // Vérifier que le nouveau mot de passe est différent
+            if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+                System.out.println("❌ Le nouveau mot de passe doit être différent");
+                response.put("message", "Le nouveau mot de passe doit être différent de l'ancien");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+
+            // Vérifier la longueur du nouveau mot de passe
+            if (request.getNewPassword().length() < 6) {
+                System.out.println("❌ Mot de passe trop court");
+                response.put("message", "Le nouveau mot de passe doit contenir au moins 6 caractères");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+
+            // Changer le mot de passe
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            userRepository.save(user);
+
+            System.out.println("✅ Mot de passe changé avec succès pour l'utilisateur " + userId);
+            response.put("message", "Mot de passe changé avec succès");
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.out.println("❌ Erreur lors du changement de mot de passe: " + e.getMessage());
+            response.put("message", "Erreur lors du changement de mot de passe: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/apiService';
+import { parseDate, parseTime, getCheckOutTime, getCheckInTime } from '../utils/formatters';
 import { 
   Calendar, 
   Umbrella, 
@@ -198,35 +199,6 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const parseDate = (dateValue) => {
-    if (!dateValue) return null;
-    if (typeof dateValue === 'string') return dateValue.split('T')[0];
-    if (Array.isArray(dateValue) && dateValue.length >= 3) {
-      const year = dateValue[0];
-      const month = String(dateValue[1]).padStart(2, '0');
-      const day = String(dateValue[2]).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    return null;
-  };
-
-  const parseTime = (timeValue) => {
-    if (!timeValue) return null;
-    if (typeof timeValue === 'string') return timeValue;
-    if (Array.isArray(timeValue) && timeValue.length >= 2) {
-      const hours = String(timeValue[0]).padStart(2, '0');
-      const minutes = String(timeValue[1]).padStart(2, '0');
-      return `${hours}:${minutes}`;
-    }
-    return null;
-  };
-
-  const getCheckOutTime = (attendance) => {
-    if (!attendance) return null;
-    // Vérifier différentes propriétés possibles
-    return attendance.checkOutTime || attendance.checkOut || attendance.checkout || null;
   };
 
   const handleCheckIn = async () => {
