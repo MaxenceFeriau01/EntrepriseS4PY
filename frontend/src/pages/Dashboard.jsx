@@ -53,12 +53,12 @@ const Dashboard = () => {
     try {
       if (isAdminOrManager) {
         // Admin/Manager : toutes les données
-        const [tasks, pendingLeaves, allUsers, allLeaves, attendances] = await Promise.all([
+        const [tasks, pendingLeaves, allUsers, allLeaves, myAttendances] = await Promise.all([
           apiService.getAllTasks(),
           apiService.getPendingLeaveRequests(),
           apiService.getAllUsers(),
           apiService.getAllLeaveRequests(),
-          apiService.getAttendances(),
+          apiService.getUserAttendances(user.id), // Ses propres présences
         ]);
 
         const activeTasks = tasks.data.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length;
@@ -77,6 +77,25 @@ const Dashboard = () => {
           const endDate = parseDate(l.endDate);
           return startDate <= today && endDate >= today;
         }).length;
+
+        // Sa propre présence aujourd'hui
+        const todayAttendance = myAttendances.data.find(att => {
+          const attDate = parseDate(att.date);
+          return attDate === today;
+        });
+
+        console.log('📊 Données présence ADMIN:', {
+          today,
+          myAttendances: myAttendances.data,
+          todayAttendance
+        });
+
+        console.log('✅ État du pointage ADMIN:', {
+          hasCheckedIn: !!todayAttendance,
+          hasCheckedOut: !!getCheckOutTime(todayAttendance),
+          checkIn: todayAttendance?.checkInTime || todayAttendance?.checkIn,
+          checkOut: getCheckOutTime(todayAttendance)
+        });
 
         // Tâches avec échéance proche (7 jours)
         const upcomingTasks = tasks.data
@@ -103,6 +122,7 @@ const Dashboard = () => {
         setRecentActivity({
           upcomingTasks,
           pendingLeaveRequests: pendingLeaves.data.slice(0, 5),
+          todayAttendance, // Ajouter sa présence
         });
       } else {
         // Employé : uniquement ses données
@@ -110,7 +130,7 @@ const Dashboard = () => {
           apiService.getTasks(user.id),
           apiService.getUnreadCount(user.id),
           apiService.getLeaveRequests(user.id),
-          apiService.getUserAttendances(user.id),
+          apiService.getUserAttendances(user.id), // ← Utiliser getUserAttendances au lieu de getAttendances
         ]);
 
         const activeTasks = tasks.data.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length;
@@ -126,6 +146,25 @@ const Dashboard = () => {
         const todayAttendance = attendances.data.find(att => {
           const attDate = parseDate(att.date);
           return attDate === today;
+        });
+
+        console.log('📊 Données présence:', {
+          today,
+          allAttendances: attendances.data,
+          todayAttendance,
+          firstAttendance: attendances.data[0],
+          dateComparison: attendances.data.map(att => ({
+            rawDate: att.date,
+            parsedDate: parseDate(att.date),
+            isToday: parseDate(att.date) === today
+          }))
+        });
+
+        console.log('✅ État du pointage:', {
+          hasCheckedIn: !!todayAttendance,
+          hasCheckedOut: !!getCheckOutTime(todayAttendance),
+          checkIn: todayAttendance?.checkInTime || todayAttendance?.checkIn,
+          checkOut: getCheckOutTime(todayAttendance)
         });
 
         // Tâches avec échéance proche
@@ -144,9 +183,9 @@ const Dashboard = () => {
         setStats({
           activeTasks,
           urgentTasks,
-          unreadMessages: messages.data.count || messages.data || 0,
-          pendingLeaves,
-          approvedLeaves,
+          unreadMessages: messages.data?.count || 0,
+          pendingLeaves: pendingLeaves || 0,
+          approvedLeaves: approvedLeaves || 0,
         });
 
         setRecentActivity({
@@ -184,6 +223,12 @@ const Dashboard = () => {
     return null;
   };
 
+  const getCheckOutTime = (attendance) => {
+    if (!attendance) return null;
+    // Vérifier différentes propriétés possibles
+    return attendance.checkOutTime || attendance.checkOut || attendance.checkout || null;
+  };
+
   const handleCheckIn = async () => {
     if (recentActivity.todayAttendance) {
       alert('Vous avez déjà pointé votre arrivée aujourd\'hui !');
@@ -195,13 +240,17 @@ const Dashboard = () => {
     try {
       setActionLoading(true);
       await apiService.checkIn(user.id);
-      alert('✅ Arrivée enregistrée avec succès !');
-      await loadDashboardData();
+      
+      // Attendre un peu pour laisser la DB se mettre à jour
+      setTimeout(async () => {
+        await loadDashboardData();
+        alert('✅ Arrivée enregistrée avec succès !');
+      }, 500);
     } catch (error) {
       console.error('Erreur pointage:', error);
       alert('❌ Erreur lors du pointage de l\'arrivée');
     } finally {
-      setActionLoading(false);
+      setTimeout(() => setActionLoading(false), 600);
     }
   };
 
@@ -211,7 +260,7 @@ const Dashboard = () => {
       return;
     }
 
-    if (recentActivity.todayAttendance.checkOutTime) {
+    if (getCheckOutTime(recentActivity.todayAttendance)) {
       alert('Vous avez déjà pointé votre départ aujourd\'hui !');
       return;
     }
@@ -221,13 +270,17 @@ const Dashboard = () => {
     try {
       setActionLoading(true);
       await apiService.checkOut(user.id);
-      alert('✅ Départ enregistré avec succès ! Bonne fin de journée !');
-      await loadDashboardData();
+      
+      // Attendre un peu pour laisser la DB se mettre à jour
+      setTimeout(async () => {
+        await loadDashboardData();
+        alert('✅ Départ enregistré avec succès ! Bonne fin de journée !');
+      }, 500);
     } catch (error) {
       console.error('Erreur départ:', error);
       alert('❌ Erreur lors du pointage du départ');
     } finally {
-      setActionLoading(false);
+      setTimeout(() => setActionLoading(false), 600);
     }
   };
 
@@ -277,7 +330,7 @@ const Dashboard = () => {
 
   const todayAttendance = recentActivity.todayAttendance;
   const hasCheckedIn = !!todayAttendance;
-  const hasCheckedOut = todayAttendance?.checkOutTime;
+  const hasCheckedOut = !!getCheckOutTime(todayAttendance);
 
   return (
     <div className="space-y-6">
@@ -295,7 +348,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions - Pointage */}
+      {/* Quick Actions - Pointage (pour tous) */}
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Zap className="w-5 h-5 text-yellow-500" />
@@ -320,7 +373,7 @@ const Dashboard = () => {
                     Arrivée enregistrée
                   </span>
                   <p className="text-sm text-gray-600">
-                    🕐 Arrivée : {parseTime(todayAttendance.checkInTime)}
+                    🕐 Arrivée : {parseTime(todayAttendance.checkInTime || todayAttendance.checkIn)}
                   </p>
                 </div>
               )}
@@ -331,8 +384,8 @@ const Dashboard = () => {
                     Journée terminée
                   </span>
                   <p className="text-sm text-gray-600">
-                    🕐 Arrivée : {parseTime(todayAttendance.checkInTime)} | 
-                    Départ : {parseTime(todayAttendance.checkOutTime)}
+                    🕐 Arrivée : {parseTime(todayAttendance.checkInTime || todayAttendance.checkIn)} | 
+                    Départ : {parseTime(getCheckOutTime(todayAttendance))}
                   </p>
                 </div>
               )}
@@ -395,14 +448,14 @@ const Dashboard = () => {
           <StatCard
             icon={Users}
             title="Employés actifs"
-            value={stats.totalEmployees}
+            value={stats.totalEmployees || 0}
             color="text-blue-600"
             bgColor="bg-blue-50"
           />
           <StatCard
             icon={AlertTriangle}
             title="Tâches urgentes"
-            value={stats.urgentTasks}
+            value={stats.urgentTasks || 0}
             color="text-orange-600"
             bgColor="bg-orange-50"
             subtitle="Haute priorité"
@@ -410,7 +463,7 @@ const Dashboard = () => {
           <StatCard
             icon={AlertCircle}
             title="Congés en attente"
-            value={stats.pendingLeaves}
+            value={stats.pendingLeaves || 0}
             color="text-orange-600"
             bgColor="bg-orange-50"
             subtitle="À valider"
@@ -418,7 +471,7 @@ const Dashboard = () => {
           <StatCard
             icon={Umbrella}
             title="En congés aujourd'hui"
-            value={stats.todayLeaves}
+            value={stats.todayLeaves || 0}
             color="text-purple-600"
             bgColor="bg-purple-50"
             subtitle="Absences du jour"
@@ -430,28 +483,28 @@ const Dashboard = () => {
           <StatCard
             icon={CheckSquare}
             title="Tâches actives"
-            value={stats.activeTasks}
+            value={stats.activeTasks || 0}
             color="text-blue-600"
             bgColor="bg-blue-50"
           />
           <StatCard
             icon={AlertTriangle}
             title="Tâches urgentes"
-            value={stats.urgentTasks}
+            value={stats.urgentTasks || 0}
             color="text-orange-600"
             bgColor="bg-orange-50"
           />
           <StatCard
             icon={Mail}
             title="Messages non lus"
-            value={stats.unreadMessages}
+            value={stats.unreadMessages || 0}
             color="text-purple-600"
             bgColor="bg-purple-50"
           />
           <StatCard
             icon={Umbrella}
             title="Congés approuvés"
-            value={stats.approvedLeaves}
+            value={stats.approvedLeaves || 0}
             color="text-green-600"
             bgColor="bg-green-50"
           />
@@ -489,7 +542,7 @@ const Dashboard = () => {
                     ✅ Présence enregistrée
                   </h3>
                   <p className="text-sm text-green-800">
-                    Votre arrivée a été enregistrée à {parseTime(todayAttendance.checkInTime)}. 
+                    Votre arrivée a été enregistrée à {parseTime(todayAttendance?.checkInTime || todayAttendance?.checkIn)}. 
                     Pensez à pointer votre départ en fin de journée.
                   </p>
                 </div>
@@ -614,7 +667,7 @@ const Dashboard = () => {
                     {user.vacationDays || 25} jours
                   </p>
                   <p className="text-xs text-gray-600 mt-1">
-                    {stats.pendingLeaves > 0 && `${stats.pendingLeaves} demande(s) en attente`}
+                    {stats.pendingLeaves > 0 ? `${stats.pendingLeaves} demande(s) en attente` : 'Aucune demande en attente'}
                   </p>
                 </div>
               </div>

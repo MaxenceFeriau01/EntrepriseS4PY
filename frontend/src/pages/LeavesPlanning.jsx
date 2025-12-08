@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import apiService from '../services/apiService';
+import axiosInstance from '../utils/axios';
 import { Calendar, Users, Search, Filter, TrendingUp, Clock } from 'lucide-react';
 
 const LeavesPlanning = () => {
@@ -25,18 +25,15 @@ const LeavesPlanning = () => {
   const fetchData = async () => {
     try {
       // Récupérer les employés
-      const employeesResponse = await apiService.getAllUsers();
-      console.log('Employees:', employeesResponse.data);
+      const employeesResponse = await axiosInstance.get('/users');
       setEmployees(employeesResponse.data);
       setFilteredEmployees(employeesResponse.data);
 
-      // Récupérer TOUS les congés via l'API réelle
-      const leavesResponse = await apiService.getAllLeaveRequests();
-      console.log('All Leaves:', leavesResponse.data);
-      setLeaves(leavesResponse.data);
-      
+      // Récupérer tous les congés approuvés
+      const leavesResponse = await axiosInstance.get('/leave-requests');
+      setLeaves(leavesResponse.data.filter(l => l.status === 'APPROVED'));
     } catch (error) {
-      console.error('Erreur chargement données:', error);
+      console.error('Erreur:', error);
     } finally {
       setLoading(false);
     }
@@ -71,35 +68,29 @@ const LeavesPlanning = () => {
 
   const isOnLeaveToday = (employeeId) => {
     const today = new Date().toISOString().split('T')[0];
-    return leaves.some(leave => {
-      if (leave.userId !== employeeId || leave.status !== 'APPROVED') return false;
-      
-      // Gérer le format date (string ou array)
-      const startDate = parseBackendDate(leave.startDate);
-      const endDate = parseBackendDate(leave.endDate);
-      
-      return startDate <= today && endDate >= today;
-    });
-  };
-
-  // Parser les dates du backend (format array ou string)
-  const parseBackendDate = (dateValue) => {
-    if (!dateValue) return null;
-    
-    if (typeof dateValue === 'string') {
-      return dateValue.split('T')[0];
-    } else if (Array.isArray(dateValue) && dateValue.length >= 3) {
-      // Format [2026, 2, 15] du backend Java
-      const year = dateValue[0];
-      const month = String(dateValue[1]).padStart(2, '0');
-      const day = String(dateValue[2]).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    return null;
+    return leaves.some(leave => 
+      leave.userId === employeeId &&
+      leave.status === 'APPROVED' &&
+      leave.startDate <= today &&
+      leave.endDate >= today
+    );
   };
 
   const getOnLeaveToday = () => {
-    return filteredEmployees.filter(emp => isOnLeaveToday(emp.id));
+    // Utiliser TOUS les employés actifs, pas seulement les filtrés
+    return employees.filter(emp => emp.active && isOnLeaveToday(emp.id));
+  };
+
+  const getLeavesThisMonth = () => {
+    const startOfMonth = new Date(selectedYear, selectedMonth, 1);
+    const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
+    const startStr = startOfMonth.toISOString().split('T')[0];
+    const endStr = endOfMonth.toISOString().split('T')[0];
+    
+    return leaves.filter(leave => {
+      // Un congé est dans ce mois si il chevauche le mois
+      return leave.startDate <= endStr && leave.endDate >= startStr;
+    });
   };
 
   const getMonthDays = () => {
@@ -109,31 +100,15 @@ const LeavesPlanning = () => {
 
   const isEmployeeOnLeaveThisDay = (employeeId, day) => {
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    return leaves.some(leave => {
-      if (leave.userId !== employeeId || leave.status !== 'APPROVED') return false;
-      
-      const startDate = parseBackendDate(leave.startDate);
-      const endDate = parseBackendDate(leave.endDate);
-      
-      return startDate <= dateStr && endDate >= dateStr;
-    });
+    return leaves.some(leave =>
+      leave.userId === employeeId &&
+      leave.status === 'APPROVED' &&
+      leave.startDate <= dateStr &&
+      leave.endDate >= dateStr
+    );
   };
 
-  const getLeaveForDay = (employeeId, day) => {
-    const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    return leaves.find(leave => {
-      if (leave.userId !== employeeId || leave.status !== 'APPROVED') return false;
-      
-      const startDate = parseBackendDate(leave.startDate);
-      const endDate = parseBackendDate(leave.endDate);
-      
-      return startDate <= dateStr && endDate >= dateStr;
-    });
-  };
-
-  const getLeaveTypeColor = (leaveType) => {
+  const getLeaveTypeColor = (leave) => {
     const colors = {
       PAID_LEAVE: 'bg-blue-500',
       SICK_LEAVE: 'bg-red-500',
@@ -142,25 +117,11 @@ const LeavesPlanning = () => {
       PATERNITY_LEAVE: 'bg-purple-500',
       OTHER: 'bg-gray-500'
     };
-    return colors[leaveType] || 'bg-gray-500';
-  };
-
-  const getLeaveTypeLabel = (leaveType) => {
-    const labels = {
-      PAID_LEAVE: 'CP',
-      SICK_LEAVE: 'Maladie',
-      UNPAID_LEAVE: 'Sans solde',
-      MATERNITY_LEAVE: 'Maternité',
-      PATERNITY_LEAVE: 'Paternité',
-      OTHER: 'Autre'
-    };
-    return labels[leaveType] || 'Autre';
+    return colors[leave.leaveType] || 'bg-gray-500';
   };
 
   const formatDate = (dateStr) => {
-    const date = parseBackendDate(dateStr);
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('fr-FR', {
+    return new Date(dateStr).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: 'short'
     });
@@ -180,7 +141,7 @@ const LeavesPlanning = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* En-tête */}
       <div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Planning des Congés</h1>
@@ -189,7 +150,7 @@ const LeavesPlanning = () => {
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Employés actifs</p>
@@ -199,19 +160,19 @@ const LeavesPlanning = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Présents aujourd'hui</p>
               <p className="text-2xl font-bold text-gray-800">
-                {filteredEmployees.length - getOnLeaveToday().length}
+                {employees.filter(e => e.active).length - getOnLeaveToday().length}
               </p>
             </div>
             <TrendingUp className="h-10 w-10 text-green-500 opacity-20" />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">En congés aujourd'hui</p>
@@ -221,13 +182,11 @@ const LeavesPlanning = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Congés approuvés</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {leaves.filter(l => l.status === 'APPROVED').length}
-              </p>
+              <p className="text-sm text-gray-600">Congés ce mois</p>
+              <p className="text-2xl font-bold text-gray-800">{getLeavesThisMonth().length}</p>
             </div>
             <Clock className="h-10 w-10 text-purple-500 opacity-20" />
           </div>
@@ -235,7 +194,7 @@ const LeavesPlanning = () => {
       </div>
 
       {/* Filtres */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Recherche */}
           <div className="relative">
@@ -309,7 +268,7 @@ const LeavesPlanning = () => {
       )}
 
       {/* Planning mensuel */}
-      <div className="bg-white rounded-lg shadow p-6 overflow-x-auto">
+      <div className="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
           Planning {months[selectedMonth]} {selectedYear}
         </h3>
@@ -320,21 +279,11 @@ const LeavesPlanning = () => {
               <th className="sticky left-0 bg-white z-10 border border-gray-200 p-3 text-left font-semibold text-gray-700 min-w-[200px]">
                 Employé
               </th>
-              {getMonthDays().map(day => {
-                const date = new Date(selectedYear, selectedMonth, day);
-                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                
-                return (
-                  <th 
-                    key={day} 
-                    className={`border border-gray-200 p-2 text-center text-xs font-medium min-w-[40px] ${
-                      isWeekend ? 'bg-gray-100 text-gray-500' : 'text-gray-600'
-                    }`}
-                  >
-                    {day}
-                  </th>
-                );
-              })}
+              {getMonthDays().map(day => (
+                <th key={day} className="border border-gray-200 p-2 text-center text-xs font-medium text-gray-600 min-w-[40px]">
+                  {day}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -350,19 +299,22 @@ const LeavesPlanning = () => {
                 </td>
                 {getMonthDays().map(day => {
                   const onLeave = isEmployeeOnLeaveThisDay(employee.id, day);
-                  const leave = getLeaveForDay(employee.id, day);
+                  const leave = leaves.find(l =>
+                    l.userId === employee.id &&
+                    l.status === 'APPROVED' &&
+                    l.startDate <= `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` &&
+                    l.endDate >= `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                  );
 
                   return (
                     <td key={day} className="border border-gray-200 p-1">
-                      {onLeave && leave ? (
-                        <div 
-                          className={`${getLeaveTypeColor(leave.leaveType)} rounded text-white text-xs p-1 text-center`}
-                          title={`${getLeaveTypeLabel(leave.leaveType)} - ${formatDate(leave.startDate)} au ${formatDate(leave.endDate)}`}
-                        >
-                          {getLeaveTypeLabel(leave.leaveType)}
-                        </div>
+                      {onLeave ? (
+                        <div
+                          className={`h-8 rounded ${getLeaveTypeColor(leave)} opacity-70`}
+                          title={`${employee.firstName} - ${leave.leaveType}`}
+                        />
                       ) : (
-                        <div className="h-6"></div>
+                        <div className="h-8" />
                       )}
                     </td>
                   );
@@ -373,35 +325,37 @@ const LeavesPlanning = () => {
         </table>
 
         {filteredEmployees.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <p>Aucun employé trouvé</p>
-          </div>
+          <p className="text-center py-8 text-gray-500">Aucun employé trouvé</p>
         )}
       </div>
 
       {/* Légende */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Légende :</h3>
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Légende</h3>
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-blue-500 rounded"></div>
-            <span className="text-sm text-gray-600">Congés payés</span>
+            <span className="text-sm text-gray-700">Congés payés</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-red-500 rounded"></div>
-            <span className="text-sm text-gray-600">Maladie</span>
+            <span className="text-sm text-gray-700">Congé maladie</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-yellow-500 rounded"></div>
-            <span className="text-sm text-gray-600">Sans solde</span>
+            <span className="text-sm text-gray-700">Congé sans solde</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-pink-500 rounded"></div>
-            <span className="text-sm text-gray-600">Maternité</span>
+            <span className="text-sm text-gray-700">Congé maternité</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-purple-500 rounded"></div>
-            <span className="text-sm text-gray-600">Paternité</span>
+            <span className="text-sm text-gray-700">Congé paternité</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-gray-500 rounded"></div>
+            <span className="text-sm text-gray-700">Autre</span>
           </div>
         </div>
       </div>
