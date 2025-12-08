@@ -16,6 +16,7 @@ import Profile from './pages/Profile';
 import Employees from './pages/Employees';
 import CreateUser from './pages/CreateUser';
 import AttendancePlanning from './pages/AttendancePlanning';
+import TaskDetail from './pages/Taskdetail'
 
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
               <Route path="/messages" element={<Messages />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/employees" element={<Employees />} />
+              <Route path="/tasks/:id" element={<TaskDetail />} />
               <Route path="/leaves-planning" element={<LeavesPlanning />} />
               <Route path="/attendance-planning" element={<AttendancePlanning />} />
               

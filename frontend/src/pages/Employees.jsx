@@ -2,19 +2,34 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../utils/axios';
-import { UserPlus, Mail, Phone, Briefcase, Shield, ShieldCheck, ShieldAlert, Calendar, Edit, Trash2, Lock, Power } from 'lucide-react';
+import { UserPlus, Mail, Phone, Briefcase, Shield, ShieldCheck, ShieldAlert, Calendar, Edit, Trash2, Lock, Power, Search, Filter, X } from 'lucide-react';
 
 const Employees = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [employees, setEmployees] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // États des filtres
+  const [searchTerm, setSearchTerm] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
+
+  // Liste des départements
+  const departments = ['IT', 'Commercial', 'Marketing', 'Comptabilité', 'RH', 'Logistique'];
+  const roles = ['ADMIN', 'MANAGER', 'EMPLOYEE'];
 
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [employees, searchTerm, departmentFilter, roleFilter, statusFilter]);
 
   const fetchEmployees = async () => {
     try {
@@ -28,6 +43,46 @@ const Employees = () => {
     }
   };
 
+  const applyFilters = () => {
+    let filtered = [...employees];
+
+    // Filtre par recherche (nom, email)
+    if (searchTerm) {
+      filtered = filtered.filter(emp => 
+        `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filtre par département
+    if (departmentFilter) {
+      filtered = filtered.filter(emp => emp.department === departmentFilter);
+    }
+
+    // Filtre par rôle
+    if (roleFilter) {
+      filtered = filtered.filter(emp => emp.role === roleFilter);
+    }
+
+    // Filtre par statut
+    if (statusFilter === 'active') {
+      filtered = filtered.filter(emp => emp.active);
+    } else if (statusFilter === 'inactive') {
+      filtered = filtered.filter(emp => !emp.active);
+    }
+
+    setFilteredEmployees(filtered);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setDepartmentFilter('');
+    setRoleFilter('');
+    setStatusFilter('all');
+  };
+
+  const hasActiveFilters = searchTerm || departmentFilter || roleFilter || statusFilter !== 'all';
+
   const handleToggleActive = async (employeeId, currentStatus) => {
     if (!window.confirm(`Êtes-vous sûr de vouloir ${currentStatus ? 'désactiver' : 'activer'} cet employé ?`)) {
       return;
@@ -40,7 +95,6 @@ const Employees = () => {
       setSuccessMessage(`Employé ${currentStatus ? 'désactivé' : 'activé'} avec succès`);
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      // Rafraîchir la liste
       fetchEmployees();
     } catch (err) {
       console.error('Erreur:', err);
@@ -76,7 +130,6 @@ const Employees = () => {
       setSuccessMessage('Employé supprimé avec succès');
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      // Rafraîchir la liste
       fetchEmployees();
     } catch (err) {
       console.error('Erreur:', err);
@@ -127,7 +180,9 @@ const Employees = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Employés</h1>
-          <p className="text-gray-600 text-sm mt-1">{employees.length} employé(s) au total</p>
+          <p className="text-gray-600 text-sm mt-1">
+            {filteredEmployees.length} employé(s) {hasActiveFilters && `sur ${employees.length} au total`}
+          </p>
         </div>
         
         {user?.role === 'ADMIN' && (
@@ -154,125 +209,178 @@ const Employees = () => {
         </div>
       )}
 
-      {/* Liste des employés */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {employees.map((employee) => (
-          <div
-            key={employee.id}
-            className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border ${
-              employee.active ? 'border-gray-200' : 'border-red-200 bg-gray-50'
-            }`}
+      {/* Filtres */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter className="h-5 w-5 text-gray-600" />
+          <h2 className="text-lg font-semibold text-gray-800">Filtres</h2>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="ml-auto text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
+              <X className="h-4 w-4" />
+              Effacer les filtres
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Filtre Département */}
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {/* En-tête avec nom et statut */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  {employee.firstName} {employee.lastName}
-                </h3>
-                <div className="flex items-center gap-2 mt-2">
+            <option value="">Tous les départements</option>
+            {departments.map(dept => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
+          </select>
+
+          {/* Filtre Rôle */}
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Tous les rôles</option>
+            {roles.map(role => (
+              <option key={role} value={role}>{getRoleLabel(role)}</option>
+            ))}
+          </select>
+
+          {/* Filtre Statut */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tous les statuts</option>
+            <option value="active">Actifs uniquement</option>
+            <option value="inactive">Inactifs uniquement</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Liste des employés */}
+      {filteredEmployees.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-8 text-center">
+          <p className="text-gray-500">Aucun employé trouvé avec ces critères</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredEmployees.map((employee) => (
+            <div
+              key={employee.id}
+              className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border ${
+                employee.active ? 'border-green-200' : 'border-red-200'
+              }`}
+            >
+              {/* En-tête de la carte */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${
+                    employee.active ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gray-400'
+                  }`}>
+                    {employee.firstName[0]}{employee.lastName[0]}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {employee.firstName} {employee.lastName}
+                    </h3>
+                    <p className="text-sm text-gray-500">{employee.position}</p>
+                  </div>
+                </div>
+                
+                {/* Badge de statut */}
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  employee.active 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {employee.active ? 'Actif' : 'Inactif'}
+                </span>
+              </div>
+
+              {/* Informations */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Mail className="h-4 w-4" />
+                  <span className="truncate">{employee.email}</span>
+                </div>
+                
+                {employee.phone && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Phone className="h-4 w-4" />
+                    <span>{employee.phone}</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Briefcase className="h-4 w-4" />
+                  <span>{employee.department}</span>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
                   {getRoleIcon(employee.role)}
                   <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadge(employee.role)}`}>
                     {getRoleLabel(employee.role)}
                   </span>
                 </div>
-              </div>
-              
-              {/* Indicateur actif/inactif */}
-              <div className="flex flex-col items-end gap-1">
-                <div 
-                  className={`h-3 w-3 rounded-full ${employee.active ? 'bg-green-500' : 'bg-red-500'}`} 
-                  title={employee.active ? 'Actif' : 'Inactif'}
-                />
-                <span className={`text-xs ${employee.active ? 'text-green-600' : 'text-red-600'}`}>
-                  {employee.active ? 'Actif' : 'Inactif'}
-                </span>
-              </div>
-            </div>
 
-            {/* Informations de contact */}
-            <div className="space-y-2 mb-4 pb-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Mail className="h-4 w-4 text-gray-400" />
-                <span className="truncate">{employee.email}</span>
-              </div>
-              
-              {employee.phone && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Phone className="h-4 w-4 text-gray-400" />
-                  <span>{employee.phone}</span>
+                  <Calendar className="h-4 w-4" />
+                  <span>{employee.vacationDays} jours de congés</span>
+                </div>
+              </div>
+
+              {/* Actions Admin */}
+              {user?.role === 'ADMIN' && (
+                <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => handleToggleActive(employee.id, employee.active)}
+                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      employee.active
+                        ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                        : 'bg-green-50 text-green-700 hover:bg-green-100'
+                    }`}
+                  >
+                    <Power className="h-4 w-4" />
+                    {employee.active ? 'Désactiver' : 'Activer'}
+                  </button>
+
+                  <button
+                    onClick={() => handleResetPassword(employee.id, employee.email)}
+                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm font-medium transition-colors"
+                  >
+                    <Lock className="h-4 w-4" />
+                    Mot de passe
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(employee.id, `${employee.firstName} ${employee.lastName}`)}
+                    className="flex items-center justify-center gap-1 px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 text-sm font-medium transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Supprimer
+                  </button>
                 </div>
               )}
-              
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Briefcase className="h-4 w-4 text-gray-400" />
-                <span>{employee.position}</span>
-              </div>
             </div>
-
-            {/* Département et congés */}
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 font-medium">Département</span>
-                <span className="text-gray-800 font-semibold">{employee.department}</span>
-              </div>
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-gray-600 font-medium flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  Congés
-                </span>
-                <span className="text-blue-600 font-semibold">{employee.vacationDays} jours</span>
-              </div>
-            </div>
-
-            {/* Actions admin */}
-            {user?.role === 'ADMIN' && (
-              <div className="flex gap-2 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => handleToggleActive(employee.id, employee.active)}
-                  className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    employee.active 
-                      ? 'bg-orange-50 text-orange-700 hover:bg-orange-100' 
-                      : 'bg-green-50 text-green-700 hover:bg-green-100'
-                  }`}
-                  title={employee.active ? 'Désactiver' : 'Activer'}
-                >
-                  <Power className="h-4 w-4" />
-                  {employee.active ? 'Désactiver' : 'Activer'}
-                </button>
-
-                <button
-                  onClick={() => handleResetPassword(employee.id, employee.email)}
-                  className="flex items-center justify-center px-3 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
-                  title="Réinitialiser le mot de passe"
-                >
-                  <Lock className="h-4 w-4" />
-                </button>
-
-                <button
-                  onClick={() => handleDelete(employee.id, `${employee.firstName} ${employee.lastName}`)}
-                  className="flex items-center justify-center px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
-                  title="Supprimer"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {employees.length === 0 && !loading && (
-        <div className="text-center py-12 bg-white rounded-lg shadow-md">
-          <Shield className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg">Aucun employé trouvé</p>
-          {user?.role === 'ADMIN' && (
-            <button
-              onClick={() => navigate('/admin/create-user')}
-              className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Créer le premier utilisateur
-            </button>
-          )}
+          ))}
         </div>
       )}
     </div>

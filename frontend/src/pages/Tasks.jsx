@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/apiService';
-import { Plus, CheckSquare, Clock, AlertCircle, X, AlertTriangle, Zap, TrendingUp } from 'lucide-react';
+import { Plus, CheckSquare, Clock, AlertCircle, X, AlertTriangle, Zap, TrendingUp, Eye } from 'lucide-react';
 
 const Tasks = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
+  const [assignedToFilter, setAssignedToFilter] = useState('ALL'); // Nouveau filtre
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -143,8 +146,13 @@ const Tasks = () => {
   // Filtrer et trier les tâches
   const filteredAndSortedTasks = tasks
     .filter((task) => {
-      if (filter === 'ALL') return true;
-      return task.status === filter;
+      // Filtre par statut
+      const statusMatch = filter === 'ALL' || task.status === filter;
+      
+      // Filtre par personne assignée (admin uniquement)
+      const assignedMatch = assignedToFilter === 'ALL' || task.assignedToId === parseInt(assignedToFilter);
+      
+      return statusMatch && assignedMatch;
     })
     .sort((a, b) => {
       // Tri par priorité d'abord (URGENT > HIGH > MEDIUM > LOW)
@@ -253,7 +261,8 @@ const Tasks = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow p-4">
-        <div className="flex space-x-2 overflow-x-auto">
+        {/* Filtres par statut */}
+        <div className="flex space-x-2 overflow-x-auto mb-4">
           {['ALL', 'TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((status) => (
             <button
               key={status}
@@ -272,6 +281,42 @@ const Tasks = () => {
             </button>
           ))}
         </div>
+
+        {/* Filtre par personne (Admin/Manager uniquement) */}
+        {isAdminOrManager && (
+          <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+              Assigné à :
+            </label>
+            <select
+              value={assignedToFilter}
+              onChange={(e) => setAssignedToFilter(e.target.value)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="ALL">Tous les employés ({tasks.length} tâches)</option>
+              {users.map((u) => {
+                const userTaskCount = tasks.filter(t => t.assignedToId === u.id).length;
+                return (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName} ({userTaskCount} tâche{userTaskCount > 1 ? 's' : ''})
+                  </option>
+                );
+              })}
+            </select>
+            
+            {(filter !== 'ALL' || assignedToFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setFilter('ALL');
+                  setAssignedToFilter('ALL');
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium whitespace-nowrap"
+              >
+                Réinitialiser les filtres
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tasks List */}
@@ -279,10 +324,33 @@ const Tasks = () => {
         {filteredAndSortedTasks.length === 0 ? (
           <div className="bg-white rounded-xl shadow p-12 text-center">
             <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">Aucune tâche pour ce filtre</p>
+            <p className="text-gray-500 text-lg">Aucune tâche pour ces filtres</p>
+            {(filter !== 'ALL' || assignedToFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setFilter('ALL');
+                  setAssignedToFilter('ALL');
+                }}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Réinitialiser les filtres
+              </button>
+            )}
           </div>
         ) : (
-          filteredAndSortedTasks.map((task) => (
+          <>
+            {/* Compteur de résultats */}
+            {(filter !== 'ALL' || assignedToFilter !== 'ALL') && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                <p className="text-sm text-blue-800">
+                  <span className="font-bold">{filteredAndSortedTasks.length}</span> tâche(s) trouvée(s) 
+                  {assignedToFilter !== 'ALL' && ` pour ${users.find(u => u.id === parseInt(assignedToFilter))?.firstName} ${users.find(u => u.id === parseInt(assignedToFilter))?.lastName}`}
+                  {filter !== 'ALL' && ` avec le statut "${getStatusLabel(filter)}"`}
+                </p>
+              </div>
+            )}
+            
+            {filteredAndSortedTasks.map((task) => (
             <div
               key={task.id}
               className="bg-white rounded-lg shadow hover:shadow-md transition-all p-5 border-l-4"
@@ -321,10 +389,12 @@ const Tasks = () => {
                         <span className="font-semibold">Assignée à:</span>
                         <span>{task.assignedToName || 'Non assignée'}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="font-semibold">Créée par:</span>
-                        <span>{task.createdByName || 'Inconnu'}</span>
-                      </div>
+                      {isAdminOrManager && (
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold">Créée par:</span>
+                          <span>{task.createdByName || 'Inconnu'}</span>
+                        </div>
+                      )}
                       {task.dueDate && (
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
@@ -342,8 +412,19 @@ const Tasks = () => {
                   </div>
                 </div>
 
-                {/* Dropdown statut */}
-                <div className="flex-shrink-0">
+                {/* Actions à droite */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Bouton Voir détails */}
+                  <button
+                    onClick={() => navigate(`/tasks/${task.id}`)}
+                    className="flex items-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                    title="Voir les détails de la tâche"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span className="hidden sm:inline">Détails</span>
+                  </button>
+
+                  {/* Dropdown statut */}
                   <select
                     value={task.status}
                     onChange={(e) => handleStatusChange(task.id, e.target.value)}
@@ -357,7 +438,8 @@ const Tasks = () => {
                 </div>
               </div>
             </div>
-          ))
+          ))}
+          </>
         )}
       </div>
 
